@@ -23,6 +23,7 @@ from copy import deepcopy
 from credentials import acquire_credentials
 from apiclient.discovery import build
 
+import random
 import os
 import Queue
 import gflags
@@ -55,35 +56,6 @@ class Query:
     def execute(self, task_queue, http):
         response = self._request_function(**self._kwargs).execute(http)
         self._on_response(task_queue, response)
-
-
-
-class _Backoff:
-    """Exponential Backoff
-
-    Implements an exponential backoff algorithm.
-    Instantiate and call loop() each time through
-    the loop, and each time a request fails call
-    fail() which will delay an appropriate amount
-    of time.
-    """
-
-    def __init__(self, maxretries=8):
-        self.retry = 0
-        self.maxretries = maxretries
-        self.first = True
-
-    def loop(self):
-        if self.first:
-            self.first = False
-            return True
-        else:
-            return self.retry < self.maxretries
-
-    def fail(self):
-        self.retry += 1
-        delay = 2 ** self.retry
-        time.sleep(delay)
         
 def batch_query(credentials, requests):
     req_queue = Queue.Queue()
@@ -109,22 +81,15 @@ def start_request_threads(request_queue, credentials, thread_count):
 
         while loop:
             query = request_queue.get()
-            backoff = _Backoff()
-            while backoff.loop():
+            for n in range(0, 7):
                 try:
                     query.execute(request_queue, http)
+                    logging.getLogger().debug("Completed request")
+                    request_queue.task_done()
                     break
                 except HttpError, e:
-                    if e.resp.status in [402, 403, 408, 500, 503, 504]:
-                        logging.getLogger().info("Increasing backoff, got status code: %d" % e.resp.status)
-                        backoff.fail()
-                #except Exception, e:
-                #    logging.getLogger().critical("Unexpected error. Exiting." + str(e))
-                #    loop = False
-                #    break
-
-            logging.getLogger().debug("Completed request")
-            request_queue.task_done()
+                    logging.getLogger().info("Increasing backoff, got status code: %d" % e.resp.status)
+                    time.sleep((2 ** n) + random.random())
 
     for i in range(thread_count):
         t = threading.Thread(target=process_requests, args=[i])

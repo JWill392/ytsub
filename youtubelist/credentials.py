@@ -16,10 +16,23 @@
 #  You should have received a copy of the GNU General Public License
 #  along with youtube-list.  If not, see <http://www.gnu.org/licenses/>.
 
+from os.path import expanduser
+from os import pathsep
 from apiclient.discovery import build
 from oauth2client.file import Storage
 from oauth2client.client import flow_from_clientsecrets
 from oauth2client.tools import run
 
-def acquire_credentials():
-    return None
+def acquire_credentials(scopes, secrets_path):
+    flow = flow_from_clientsecrets(secrets_path,
+      message="Missing client secrets file",
+      scope=scopes)
+
+    
+    storage = Storage(expanduser("~") + "/.youtube-list-oauth2.json")
+    credentials = storage.get()
+
+    if credentials is None or credentials.invalid:
+      credentials = run(flow, storage)
+
+    return credentials
