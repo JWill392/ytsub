@@ -36,9 +36,6 @@ import time
 # How many threads to start.
 NUM_THREADS = 3
 
-# Length of Goog API's page tokens
-PAGE_TOKEN_LENGTH = 6
-
 FLAGS = gflags.FLAGS
 gflags.DEFINE_enum('logging_level', 'ERROR',
         ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
@@ -75,7 +72,7 @@ class Query:
         # prevent last fetch overshoot
         if self._MAX_ITEMS is not -1:
             self._kwargs['maxResults'] = \
-                    min(self._kwargs['maxResults'], self._MAX_ITEMS - self._item_count)
+                    min(int(self._kwargs['maxResults']), self._MAX_ITEMS - self._item_count)
     
         # send REST API request and wait for response
         response = self._request_function(**self._kwargs).execute(http=self._http)
@@ -99,47 +96,86 @@ class Query:
         self._kwargs["pageToken"] = response["nextPageToken"]
         return response
 
+def _flush_queue_to_list(queue):
+    ret = []
+    while not queue.empty():
+        ret.append(queue.get())
+        queue.task_done()
+    return ret
 
-def batch_query(credentials, queries, thread_count):
-    """Create the thread pool to process the requests."""
-    responses = []
-    responses_lock = RLock()
+class _Mock_Queue:
+    def __init__(self):
+        self.delegate = []
+    def put(self, elem): 
+        self.delegate.append(elem)
+
+def batch_query(credentials, queries, thread_count=NUM_THREADS):
+    request_queue = Queue.Queue()
+    response_queue = _Mock_Queue() #multithreading safe because GIL
     
-    query_queue = Queue.Queue()
     
-    def process_requests(n):
+    stop = start_request_thread_pool(credentials, request_queue, response_queue, thread_count)
+    
+    # Put requests into task queue
+    for q in queries:
+        request_queue.put(q)
+    
+    # Wait for all the requests to finish
+    request_queue.join()
+    stop.set()
+    
+    return response_queue.delegate
+    
+
+#TODO consider converting to object using "with" statement
+def start_request_thread_pool(credentials, request_queue, response_queue, thread_count):
+    """Creates a thread pool to process api requests.
+    Returns a threading.Event object.  When set, this stops the thread pool."""
+    # TODO I don't like this event object.
+    finished_event = threading.Event()
+    
+    def process_requests():
         http = httplib2.Http()
         http = credentials.authorize(http)
         loop = True
 
-        while loop:
-            query = query_queue.get()
+        while not finished_event.is_set():
+            try:
+                query = request_queue.get(block=True, timeout=0.01)
+            except Queue.Empty:
+                continue
+                
             query.set_http(http)
-            for n in range(0, 7):
+            
+            retries = 0
+            while (retries < 8):
                 try:
                     for response in query:
-                        with responses_lock:
-                            responses.append(response)
+                        response_queue.put(response)
+                        retries -= 1
                     
                     logging.getLogger().debug("Completed request")
-                    query_queue.task_done()
+                    request_queue.task_done()
                     break
                 except HttpError, e:
+                    retries += 1
                     logging.getLogger().info("Increasing backoff, got status code: %d" % e.resp.status)
-                    time.sleep((2 ** n) * 0.1 + (random.random() * 0.25))
-
+                    time.sleep((2 ** retries) * 0.1 + (random.random() * 0.25))
+                except Exception, e:
+                    logging.getLogger().critical("Unexpected error in process_requests thread. Exiting. " + str(e))
+                    finished_event.set()
+                    
+                    # HACK causes parent thread to stop if something goes wrong in this thread, at least
+                    while request_queue.unfinished_tasks > 0:
+                        request_queue.task_done()
+                    break
+            
     for i in range(thread_count):
-        t = threading.Thread(target=process_requests, args=[i])
-        t.daemon = True
+        t = threading.Thread(target=process_requests)
         t.start()
-        
-    # Put requests into task queue
-    for q in queries:
-        query_queue.put(q)
     
-    # Wait for all the requests to finish
-    query_queue.join()
-    return responses
+    return finished_event
+
     
     
 def _test_batch_query(youtube, credentials):
@@ -157,9 +193,10 @@ def _test_batch_query_paging(youtube, credentials):
     MAX_ITEMS = 75
     queries = []
     
-    for i in range(20):
+    for i in range(5):
         queries.append(Query(youtube.playlistItems().list, 
                 {"part":"snippet", "playlistId":"UUVtt6C8Qu_ia7g2l80sY2kQ",
+                "maxResults":"30",
                 "fields":"items/snippet,nextPageToken"},
                 MAX_ITEMS=MAX_ITEMS))
     
@@ -167,6 +204,49 @@ def _test_batch_query_paging(youtube, credentials):
     for resp in batch_query(credentials, queries, NUM_THREADS):
         print hash(repr(resp))
 
+def _test_chain_query(youtube, credentials):
+    #TODO complete
+    pass
+
+def _test_response_stream(youtube, credentials):
+    MAX_ITEMS = 75
+    
+    queries = [Query(youtube.playlistItems().list, {"part":"snippet",
+                           "maxResults":"2",
+                           "playlistId":"UUVtt6C8Qu_ia7g2l80sY2kQ",
+                           "fields":"items/snippet,nextPageToken"},
+                           MAX_ITEMS=MAX_ITEMS)]
+
+    request_queue = Queue.Queue()
+    response_queue = Queue.Queue()
+    
+    stop = start_request_thread_pool(credentials, request_queue, response_queue, NUM_THREADS)
+    
+    # Put requests into task queue
+    for q in queries:
+        request_queue.put(q)
+    
+    
+    def process_responses():
+        while not stop.is_set():
+            try:
+                resp = response_queue.get(block=True, timeout=0.01)
+            except Queue.Empty:
+                continue
+            
+            print hash(repr(resp))
+            response_queue.task_done()
+    
+    response_thread = threading.Thread(target=process_responses)
+    response_thread.start()
+    
+    # Wait for all the requests to finish
+    request_queue.join()
+    
+    # Wait for all the responses to be handled
+    response_queue.join()
+    
+    stop.set()
 
 def main(argv):
     try:
@@ -176,7 +256,7 @@ def main(argv):
         sys.exit(1)
 
     logging.basicConfig()
-    logging.getLogger().setLevel(getattr(logging, FLAGS.logging_level))
+    logging.getLogger().setLevel("ERROR")
 
     CLIENT_SECRETS_FILE = "../data/client_secrets.json"
     SCOPES = "https://www.googleapis.com/auth/youtube"
@@ -189,7 +269,8 @@ def main(argv):
         http=credentials.authorize(httplib2.Http()))
     
     #_test_batch_query(youtube, credentials)
-    _test_batch_query_paging(youtube, credentials)
+    #_test_batch_query_paging(youtube, credentials)
+    _test_response_stream(youtube, credentials)
     
 
 
