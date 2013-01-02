@@ -18,6 +18,7 @@
 
 import httplib2
 import api
+import logging
 
 from apiclient.discovery import build
 from credentials import acquire_credentials
@@ -27,6 +28,9 @@ def main():
     SCOPES = "https://www.googleapis.com/auth/youtube"
     YOUTUBE_API_SERVICE_NAME = "youtube"
     YOUTUBE_API_VERSION = "v3"
+
+    logging.basicConfig()
+    logging.getLogger().setLevel('DEBUG')
 
     credentials = acquire_credentials(SCOPES, CLIENT_SECRETS_FILE)
 

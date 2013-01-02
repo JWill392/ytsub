@@ -10,11 +10,11 @@
 #
 #  youtube-list is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.    See the
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
 #
 #  You should have received a copy of the GNU General Public License
-#  along with youtube-list.    If not, see <http://www.gnu.org/licenses/>.
+#  along with youtube-list.  If not, see <http://www.gnu.org/licenses/>.
 
 
 from threading import RLock
@@ -45,34 +45,67 @@ gflags.DEFINE_enum('logging_level', 'ERROR',
         'Set the level of logging detail.')
 
 class Query:
-    def __init__(self, request_function, kwargs, on_response):
+    def __init__(self, request_function, kwargs, http=None, MAX_ITEMS=-1):
         self._request_function = request_function
+        self._item_count = 0
+        self._MAX_ITEMS = MAX_ITEMS
+        self._http = http
+        self._done = ""
+        
+        if 'maxResults' not in kwargs:
+            kwargs['maxResults'] = 50
         self._kwargs = kwargs
-        self._on_response = on_response
     
-    def page(self, response):
+    def set_http(self, http):
+        self._http = http
+    
+    def get_total_items(self):
+        return self._item_count
+    
+    def __iter__(self):
+        return self
+    
+    def next(self):
+        if self._done:
+            raise StopIteration(self._done)
+    
+        if self._http is None:
+            raise ValueError("http is None")
+    
+        # prevent last fetch overshoot
+        if self._MAX_ITEMS is not -1:
+            self._kwargs['maxResults'] = \
+                    min(self._kwargs['maxResults'], self._MAX_ITEMS - self._item_count)
+    
+        # send REST API request and wait for response
+        response = self._request_function(**self._kwargs).execute(http=self._http)
+        try:
+            self._item_count += len(response['items'])
+        except KeyError:
+            pass # no items
+
+        
+        # done? client-imposed item max reached
+        if self._MAX_ITEMS is not -1 and self.get_total_items() == self._MAX_ITEMS:
+            self._done = "received MAX_ITEMS items (%i)" % self._item_count
+            return response
+            
+        # done? server exhausted (no more items avail)
+        if 'nextPageToken' not in response:
+            self._done = "Server has no more items"
+            return response
+        
+        # not done; page query kwargs
         self._kwargs["pageToken"] = response["nextPageToken"]
-     
-    def execute(self, task_queue, http):
-        response = self._request_function(**self._kwargs).execute(http)
-        self._on_response(task_queue, response)
-        
-def batch_query(credentials, requests):
-    req_queue = Queue.Queue()
+        return response
 
-    start_request_threads(req_queue, credentials, NUM_THREADS)
 
-    # Put requests into task queue
-    for req in requests:
-        req_queue.put(req)
-        
+def batch_query(credentials, queries, thread_count):
+    """Create the thread pool to process the requests."""
+    responses = []
+    responses_lock = RLock()
     
-    # Wait for all the requests to finish
-    req_queue.join()
-
-def start_request_threads(request_queue, credentials, thread_count):
-    """Create the thread pool to process the requests.
-    Put None onto queue to terminate thread"""
+    query_queue = Queue.Queue()
     
     def process_requests(n):
         http = httplib2.Http()
@@ -80,21 +113,59 @@ def start_request_threads(request_queue, credentials, thread_count):
         loop = True
 
         while loop:
-            query = request_queue.get()
+            query = query_queue.get()
+            query.set_http(http)
             for n in range(0, 7):
                 try:
-                    query.execute(request_queue, http)
+                    for response in query:
+                        with responses_lock:
+                            responses.append(response)
+                    
                     logging.getLogger().debug("Completed request")
-                    request_queue.task_done()
+                    query_queue.task_done()
                     break
                 except HttpError, e:
                     logging.getLogger().info("Increasing backoff, got status code: %d" % e.resp.status)
-                    time.sleep((2 ** n) + random.random())
+                    time.sleep((2 ** n) * 0.1 + (random.random() * 0.25))
 
     for i in range(thread_count):
         t = threading.Thread(target=process_requests, args=[i])
         t.daemon = True
         t.start()
+        
+    # Put requests into task queue
+    for q in queries:
+        query_queue.put(q)
+    
+    # Wait for all the requests to finish
+    query_queue.join()
+    return responses
+    
+    
+def _test_batch_query(youtube, credentials):
+    queries = []
+    for i in range(20):
+    #request_function, kwargs, http=None, MAX_ITEMS=-1
+        queries.append(Query(youtube.channels().list, 
+                {"mine":True, "part":"contentDetails"}))
+    
+    
+    for resp in batch_query(credentials, queries, NUM_THREADS):
+        print resp
+
+def _test_batch_query_paging(youtube, credentials):
+    MAX_ITEMS = 75
+    queries = []
+    
+    for i in range(20):
+        queries.append(Query(youtube.playlistItems().list, 
+                {"part":"snippet", "playlistId":"UUVtt6C8Qu_ia7g2l80sY2kQ",
+                "fields":"items/snippet,nextPageToken"},
+                MAX_ITEMS=MAX_ITEMS))
+    
+    
+    for resp in batch_query(credentials, queries, NUM_THREADS):
+        print hash(repr(resp))
 
 
 def main(argv):
@@ -117,22 +188,11 @@ def main(argv):
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
         http=credentials.authorize(httplib2.Http()))
     
-    watched_lock = RLock()
-    watched_id_responses = []
-    def on_watched_response(task_queue, response):
-        with watched_lock:
-            watched_id_responses.append(response)
-        
+    #_test_batch_query(youtube, credentials)
+    _test_batch_query_paging(youtube, credentials)
     
-    queries = []
-    for i in range(20):
-        queries.append(Query(youtube.channels().list, {
-                "mine":True, "part":"contentDetails"
-                }, on_watched_response))
-    
-    batch_query(credentials, queries)
-    for resp in watched_id_responses:
-        print resp
+
+
 
 
 
