@@ -26,7 +26,6 @@ from apiclient.discovery import build
 import random
 import os
 import Queue
-import gflags
 import httplib2
 import logging
 import sys

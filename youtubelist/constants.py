@@ -1,4 +1,4 @@
-#  setup.py
+#  constants.py
 #  This file is part of youtube-list 
 # 
 #  Copyright (C) 2013 - Jackson Williams
@@ -16,19 +16,7 @@
 #  You should have received a copy of the GNU General Public License
 #  along with youtube-list.  If not, see <http://www.gnu.org/licenses/>.
 
-from youtubelist import __version__
-from distutils.core import setup
+#TODO improve so additional IDs after a full URL will be detected as probably not intended
+#TODO split into multiple, easier to read, regexes
+YTL_VIDEO_ID_REGEX = '^(?:(?:(?:http://)?www\.)?youtube\.com/watch\?(\S)*?v=([a-zA-Z0-9_-]{11})[\S]*)$|^([a-zA-Z0-9_-]{11})$'
 
-setup(
-    name='youtube-list',
-    author='Jackson Williams',
-    author_email='jackson.r.williams+youtube-list@gmail.com',
-    version=__version__,
-    packages=['youtubelist', 'youtubelist.test'],
-    license='LICENSE.txt',
-    description='List your Youtube subscription videos',
-    long_description=open('README.txt').read(),
-    install_requires=[
-        "google-api-python-client >= 1.0"
-    ],
-)
