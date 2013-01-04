@@ -22,21 +22,20 @@ import httplib2
 import api
 import logging
 import fileinput
+import re
 
 from __init__ import __version__
 from apiclient.discovery import build
 from credentials import acquire_credentials
+from argparse_util import ListOrStdinAction
 
-class YTVideoID:
-    def __init__(self, url_or_id):
-        # TODO assert well-formatted, extract
-        self.__data = url_or_id
-    def __repr__(self):
-        return `self.__data`
-    def __str__(self):
-        return str(self.__data)
-    def __getattr__(self, attr):
-        return getattr(self.__data, attr)
+__vid_regex = re.compile(r'^(?:(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?v='
+                       r')?([a-zA-Z0-9_-]{11})\S*)$')
+def videoID(url_or_id):
+    match = __vid_regex.match(url_or_id)
+    if not match:
+        raise ValueError('Value must be a youtube video id or the watch url')
+    return match.group(1)
     
 
 def _setup():
@@ -59,27 +58,21 @@ def _setup():
 def main():
     parser = argparse.ArgumentParser(
                     description='List your new Youtube subscription videos.',
-                    epilog='''Examples:
-  %(prog)s                 Output list of 'new' videos.
-  %(prog)s --mark-watched  Reads from stdin vid ids to mark as watched.
-Report %(prog)s bugs to <https://github.com/JWill392/youtube-list/issues>'''
+                    epilog='Report %(prog)s bugs to '
+                           '<https://github.com/JWill392/youtube-list/issues>'
              )
-    parser.add_argument('-w', '--mark-watched', nargs='*')
+    parser.add_argument('--mark-watched', type=videoID,
+                        action=ListOrStdinAction, metavar='Video ID')
     parser.add_argument('-v', '--verbose', action='count', default=0)
     parser.add_argument('--version', action='version', 
-            version='%(prog)s '+__version__)
+                        version='%(prog)s '+__version__)
     
     args = parser.parse_args()
     
     # handle verbose
     logging.getLogger().setLevel(('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')[args.verbose])
     
-    # handle mark_watched
-    if (len(args.mark_watched) == 0):
-        for line in sys.stdin:
-            args.mark_watched.append(line)
     
-    map(args.mark_watched, YTVideoID.__init__)
     
     print args
     

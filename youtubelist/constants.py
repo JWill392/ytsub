@@ -16,7 +16,4 @@
 #  You should have received a copy of the GNU General Public License
 #  along with youtube-list.  If not, see <http://www.gnu.org/licenses/>.
 
-#TODO improve so additional IDs after a full URL will be detected as probably not intended
-#TODO split into multiple, easier to read, regexes
-YTL_VIDEO_ID_REGEX = '^(?:(?:(?:http://)?www\.)?youtube\.com/watch\?(\S)*?v=([a-zA-Z0-9_-]{11})[\S]*)$|^([a-zA-Z0-9_-]{11})$'
 
