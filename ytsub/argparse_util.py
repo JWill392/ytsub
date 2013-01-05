@@ -86,7 +86,7 @@ class ListOrStdinAction(Action):
     def __call__(self, parser, namespace, values, option_string=None):
         items = []
         
-        if (not self.required and len(values) is 0) or (self.required and values is None):
+        if values is None or len(values) is 0:
             for line in sys.stdin:
                 items.append(parser._get_value(self, line))
             setattr(namespace, self.dest, items)

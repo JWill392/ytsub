@@ -30,8 +30,8 @@ from credentials import acquire_credentials
 from argparse_util import ListOrStdinAction
 from argparse_util import MaxCountAction
 
-__vid_regex = re.compile(r'^(?:(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?v='
-                       r')?([a-zA-Z0-9_-]{11})\S*)$')
+__vid_regex = re.compile(r'^(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?'
+                         r'v=)?([a-zA-Z0-9_-]{11})\S*$')
 __LOG_LEVELS = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
 
 
@@ -56,19 +56,19 @@ def _setup():
         
     return (youtube, credentials)
 
+def _list():
+    print "you called list!"
+    #TODO
 
+def _mark_watched():
+    print "you called mark-watched!"
+    #TODO
 
 def main():
     parser = argparse.ArgumentParser(
-                    description='List your new Youtube subscription videos.',
-                    epilog='Report %(prog)s bugs to '
-                           '<https://github.com/JWill392/youtube-list/issues>')
-             
-    parser.add_argument('--mark-watched', 
-                        type=videoID,
-                        action=ListOrStdinAction, 
-                        metavar='Video ID')
-                        
+                    description='Perform useful tasks on your Youtube video'
+                                ' subscriptions.')
+
     parser.add_argument('-v', '--verbose', 
                         action=MaxCountAction, 
                         default=0, 
@@ -77,11 +77,34 @@ def main():
                                       ' times; {count} out of range of ' + 
                                       str(__LOG_LEVELS),
                         help='Increases verbosity level.  Use multiple times '
-                             'to max of {maxl}.'.format(maxl=len(__LOG_LEVELS)-1))
-                                      
+                             'to max of {maxl}.'
+                             .format(maxl=len(__LOG_LEVELS)-1))
+    
     parser.add_argument('--version', 
                         action='version', 
                         version='%(prog)s '+__version__)
+    
+    # SUBCOMMANDS
+    subparsers = parser.add_subparsers(title='subcommands')
+    # SUBCOMMAND list
+    list_parser = subparsers.add_parser('list',
+                                        description='List your new Youtube '
+                                                    'subscription videos.')
+    list_parser.set_defaults(func=_list)
+    
+    # SUBCOMMAND mark-watched
+    mark_watched_parser = subparsers.add_parser('mark-watched',
+                                                description='Mark video ids as'
+                                                            ' watched.')
+    mark_watched_parser.add_argument('ids',
+                                     type=videoID,
+                                     action=ListOrStdinAction, 
+                                     metavar='Video ID')
+    mark_watched_parser.set_defaults(func=_mark_watched)
+             
+                        
+                                      
+
     
     args = parser.parse_args()
     
