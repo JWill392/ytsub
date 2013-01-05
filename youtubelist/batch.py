@@ -32,6 +32,10 @@ import sys
 import threading
 import time
 
+#TODO use priority queue.  In cmd-line application, would allow us to stream output (useful for using with pipes, if some other time-intensive task uses this as input).  Prioritize depth-first rather than bredth-first.  Perhaps just a bool option?  I dunno when you'd want bredth rather than depth first, though.
+# NOTE the problem with this is if we wanted to sort the output.  BUT the unix philosophy says we shouldn't.  A tool like sort should do that. Which is convenient for streaming output!
+# Don't think of the command-line tool as a USER interface -- think of what would be nice for using it as the backend for a little pyside GUI.
+
 # How many threads to start.
 NUM_THREADS = 3
 

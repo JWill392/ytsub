@@ -28,15 +28,18 @@ from __init__ import __version__
 from apiclient.discovery import build
 from credentials import acquire_credentials
 from argparse_util import ListOrStdinAction
+from argparse_util import MaxCountAction
 
 __vid_regex = re.compile(r'^(?:(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?v='
                        r')?([a-zA-Z0-9_-]{11})\S*)$')
+__LOG_LEVELS = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
+
+
 def videoID(url_or_id):
     match = __vid_regex.match(url_or_id)
     if not match:
         raise ValueError('Value must be a youtube video id or the watch url')
     return match.group(1)
-    
 
 def _setup():
     CLIENT_SECRETS_FILE = "../data/client_secrets.json"
@@ -59,18 +62,29 @@ def main():
     parser = argparse.ArgumentParser(
                     description='List your new Youtube subscription videos.',
                     epilog='Report %(prog)s bugs to '
-                           '<https://github.com/JWill392/youtube-list/issues>'
-             )
-    parser.add_argument('--mark-watched', type=videoID,
-                        action=ListOrStdinAction, metavar='Video ID')
-    parser.add_argument('-v', '--verbose', action='count', default=0)
-    parser.add_argument('--version', action='version', 
+                           '<https://github.com/JWill392/youtube-list/issues>')
+             
+    parser.add_argument('--mark-watched', 
+                        type=videoID,
+                        action=ListOrStdinAction, 
+                        metavar='Video ID')
+                        
+    parser.add_argument('-v', '--verbose', 
+                        action=MaxCountAction, 
+                        default=0, 
+                        max_count=len(__LOG_LEVELS)-1, 
+                                      max_exceeded_msg='flag included too many'
+                                      ' times; {count} out of range of ' + 
+                                      str(__LOG_LEVELS))
+                                      
+    parser.add_argument('--version', 
+                        action='version', 
                         version='%(prog)s '+__version__)
     
     args = parser.parse_args()
     
     # handle verbose
-    logging.getLogger().setLevel(('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')[args.verbose])
+    logging.getLogger().setLevel(__LOG_LEVELS[args.verbose])
     
     
     
