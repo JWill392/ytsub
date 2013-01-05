@@ -2,8 +2,9 @@
 ytsub
 =====
 
-ytsub provides a command-line interface to list your Youtube
-subscription videos. You might find it most useful for filtering those
+NOTE: ytsub has not yet reached its first release, and as such some things won't work.
+
+ytsub provides a command-line interface to do things with your Youtube subscriptions. You might find it most useful for filtering those
 videos using grep, or setting up an auto-downloader using the excellent
 youtube-dl. An example usage might look like this::
 
