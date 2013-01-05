@@ -22,6 +22,7 @@ from apiclient.errors import HttpError
 from copy import deepcopy
 from credentials import acquire_credentials
 from apiclient.discovery import build
+from pprint import pprint
 
 import random
 import os
@@ -38,11 +39,6 @@ import time
 
 # How many threads to start.
 NUM_THREADS = 3
-
-FLAGS = gflags.FLAGS
-gflags.DEFINE_enum('logging_level', 'ERROR',
-        ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
-        'Set the level of logging detail.')
 
 class Query:
     def __init__(self, request_function, kwargs, http=None, MAX_ITEMS=-1):
@@ -64,6 +60,10 @@ class Query:
     
     def __iter__(self):
         return self
+    
+    def get_last_request(self):
+        return {'function':self._request_function,
+                'kwargs':deepcopy(self._kwargs)}
     
     def next(self):
         if self._done:
@@ -99,25 +99,25 @@ class Query:
         self._kwargs["pageToken"] = response["nextPageToken"]
         return response
 
-def _flush_queue_to_list(queue):
-    ret = []
-    while not queue.empty():
-        ret.append(queue.get())
-        queue.task_done()
-    return ret
-
-class _Mock_Queue:
-    def __init__(self):
-        self.delegate = []
-    def put(self, elem): 
-        self.delegate.append(elem)
-
 def batch_query(credentials, queries, thread_count=NUM_THREADS):
     request_queue = Queue.Queue()
-    response_queue = _Mock_Queue() #multithreading safe because GIL
+
+    responses_lock = RLock()
+    responses = {}
     
+    def on_response_func(for_query, request, response):
+        '''Appends to responses; the dict of query:[responses]'''
+        with responses_lock:
+            #TODO append query pages together
+            if responses.get(for_query) is None:
+                responses[for_query] = []
+                
+            # will always be appended in order due to youtube api paging
+            responses[for_query].append({'request':request, 
+                                         'response':response})
     
-    stop = start_request_thread_pool(credentials, request_queue, response_queue, thread_count)
+    stop_event = start_request_thread_pool(credentials, request_queue, 
+                                           on_response_func, thread_count)
     
     # Put requests into task queue
     for q in queries:
@@ -125,13 +125,20 @@ def batch_query(credentials, queries, thread_count=NUM_THREADS):
     
     # Wait for all the requests to finish
     request_queue.join()
-    stop.set()
+    stop_event.set() # close thread pool
     
-    return response_queue.delegate
-    
+    return responses
 
-#TODO consider converting to object using "with" statement
-def start_request_thread_pool(credentials, request_queue, response_queue, thread_count):
+def pretty_print_batch_query_responses(resps):
+    for query, response_book in resps.items():
+        print '\n==============='
+        print query
+        for i, response_page in enumerate(response_book):
+            print 'PAGE', i
+            pprint(response_page['response'])    
+
+#TODO convert to object using "with" statement instead of returning finished_event
+def start_request_thread_pool(credentials, request_queue, on_response_func, thread_count):
     """Creates a thread pool to process api requests.
     Returns a threading.Event object.  When set, this stops the thread pool."""
     # TODO I don't like this event object.
@@ -154,7 +161,7 @@ def start_request_thread_pool(credentials, request_queue, response_queue, thread
             while (retries < 8):
                 try:
                     for response in query:
-                        response_queue.put(response)
+                        on_response_func(query, query.get_last_request(), response)
                         retries -= 1
                     
                     logging.getLogger().debug("Completed request")
@@ -189,23 +196,23 @@ def _test_batch_query(youtube, credentials):
                 {"mine":True, "part":"contentDetails"}))
     
     
-    for resp in batch_query(credentials, queries, NUM_THREADS):
-        print resp
+    resps = batch_query(credentials, queries, NUM_THREADS)
+    pretty_print_batch_query_responses(resps)
 
 def _test_batch_query_paging(youtube, credentials):
-    MAX_ITEMS = 75
+    MAX_ITEMS = 5
     queries = []
     
     for i in range(5):
         queries.append(Query(youtube.playlistItems().list, 
                 {"part":"snippet", "playlistId":"UUVtt6C8Qu_ia7g2l80sY2kQ",
-                "maxResults":"30",
+                "maxResults":"2",
                 "fields":"items/snippet,nextPageToken"},
                 MAX_ITEMS=MAX_ITEMS))
     
     
-    for resp in batch_query(credentials, queries, NUM_THREADS):
-        print hash(repr(resp))
+    resps = batch_query(credentials, queries, NUM_THREADS)
+    pretty_print_batch_query_responses(resps)
 
 def _test_chain_query(youtube, credentials):
     #TODO complete
@@ -252,12 +259,6 @@ def _test_response_stream(youtube, credentials):
     stop.set()
 
 def main(argv):
-    try:
-        argv = FLAGS(argv)
-    except gflags.FlagsError, e:
-        print '%s\\nUsage: %s ARGS\\n%s' % (e, argv[0], FLAGS)
-        sys.exit(1)
-
     logging.basicConfig()
     logging.getLogger().setLevel("ERROR")
 
@@ -272,8 +273,8 @@ def main(argv):
         http=credentials.authorize(httplib2.Http()))
     
     #_test_batch_query(youtube, credentials)
-    #_test_batch_query_paging(youtube, credentials)
-    _test_response_stream(youtube, credentials)
+    _test_batch_query_paging(youtube, credentials)
+    #TODO _test_response_stream(youtube, credentials)
     
 
 

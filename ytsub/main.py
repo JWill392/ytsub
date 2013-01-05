@@ -30,13 +30,12 @@ from credentials import acquire_credentials
 from argparse_util import ListOrStdinAction
 from argparse_util import MaxCountAction
 
-__vid_regex = re.compile(r'^(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?'
+__VID_REGEX = re.compile(r'^(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?'
                          r'v=)?([a-zA-Z0-9_-]{11})\S*$')
 __LOG_LEVELS = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
 
-
 def videoID(url_or_id):
-    match = __vid_regex.match(url_or_id)
+    match = __VID_REGEX.match(url_or_id)
     if not match:
         raise ValueError('Value must be a youtube video id or the watch url')
     return match.group(1)
@@ -57,10 +56,17 @@ def _setup():
     return (youtube, credentials)
 
 def _list():
-    print "you called list!"
-    #TODO
+    youtube, credentials = _setup()
+    
+    watched = api.get_watched_ids(youtube)
+    new = api.get_sub_vids(youtube)
+    unwatched_new = filter(lambda x: x.id not in watched, new)
+    unwatched_new.sort(reverse=True)
+    for v in unwatched_new:
+        print v
 
 def _mark_watched():
+    youtube, credentials = _setup()
     print "you called mark-watched!"
     #TODO
 
@@ -115,7 +121,7 @@ def main():
     
     print args
     
-    youtube, credentials = _setup()
+    args.func()
         
     #watched = api.get_watched_ids(youtube)
     #new = api.get_sub_vids(youtube)
