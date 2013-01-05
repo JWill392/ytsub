@@ -1,15 +1,15 @@
-===========
-youtube-list
-===========
+=====
+ytsub
+=====
 
-youtube-list provides a command-line interface to list your Youtube
+ytsub provides a command-line interface to list your Youtube
 subscription videos. You might find it most useful for filtering those
 videos using grep, or setting up an auto-downloader using the excellent
 youtube-dl. An example usage might look like this::
 
-    $ youtube-list | grep 'FTB\|Feed The Beast' | awk -F"\t" '{print $2}' | tee >(youtube-dl -a /dev/stdin >/dev/tty) | youtube-list --mark-watched
-    $ youtube-list --mark-watched oWT4WP4Q19E f_QCZiSPbUM
-    $ youtube-list --mark-watched
+    $ ytsub | grep 'FTB\|Feed The Beast' | awk -F"\t" '{print $2}' | tee >(youtube-dl -a /dev/stdin >/dev/tty) | ytsub --mark-watched
+    $ ytsub --mark-watched oWT4WP4Q19E f_QCZiSPbUM
+    $ ytsub --mark-watched
 > oWT4WP4Q19E
 > f_QCZiSPbUM
 

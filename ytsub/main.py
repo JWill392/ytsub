@@ -1,20 +1,20 @@
 #  main.py
-#  This file is part of youtube-list 
+#  This file is part of ytsub 
 # 
 #  Copyright (C) 2013 - Jackson Williams
 
-#  youtube-list is free software: you can redistribute it and/or modify
+#  ytsub is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
 #  the Free Software Foundation, either version 3 of the License, or
 #  (at your option) any later version.
 #
-#  youtube-list is distributed in the hope that it will be useful,
+#  ytsub is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
 #  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
 #
 #  You should have received a copy of the GNU General Public License
-#  along with youtube-list.  If not, see <http://www.gnu.org/licenses/>.
+#  along with ytsub.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
 import sys
@@ -75,7 +75,9 @@ def main():
                         max_count=len(__LOG_LEVELS)-1, 
                                       max_exceeded_msg='flag included too many'
                                       ' times; {count} out of range of ' + 
-                                      str(__LOG_LEVELS))
+                                      str(__LOG_LEVELS),
+                        help='Increases verbosity level.  Use multiple times '
+                             'to max of {maxl}.'.format(maxl=len(__LOG_LEVELS)-1))
                                       
     parser.add_argument('--version', 
                         action='version', 
