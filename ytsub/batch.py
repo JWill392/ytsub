@@ -193,7 +193,7 @@ class RequestThreadPool:
 def authorized_http_factory(credentials):
     return lambda : credentials.authorize(httplib2.Http())
 
-def batch_query(credentials, queries):
+def batch_query(http_factory, queries):
     '''Simple interface to RequestThreadPool to return a simple list of 
     responses to queries'''
     ret = []
@@ -202,8 +202,7 @@ def batch_query(credentials, queries):
     def on_response_func(for_query, request, response):
         ret.append((for_query, request, response))
     
-    pool = RequestThreadPool(authorized_http_factory(credentials), 
-                             on_response_func)    
+    pool = RequestThreadPool(http_factory, on_response_func)    
     with pool:
         for q in queries:
             pool.put_request(q)
@@ -234,7 +233,7 @@ def _pretty_print_response(for_query, request, response):
 
     
     
-def _test_batch_query(youtube, credentials):
+def _test_batch_query(youtube, http_factory):
     queries = []
     for i in range(20):
     #request_function, kwargs, http=None, MAX_ITEMS=-1
@@ -242,11 +241,11 @@ def _test_batch_query(youtube, credentials):
                 {"mine":True, "part":"contentDetails"}))
     
     
-    resps = batch_query(credentials, queries)
+    resps = batch_query(http_factory, queries)
     for response in resps:
         _pretty_print_response(*response)
 
-def _test_batch_query_paging(youtube, credentials):
+def _test_batch_query_paging(youtube, http_factory):
     queries = []
     
     for i in range(5):
@@ -257,15 +256,15 @@ def _test_batch_query_paging(youtube, credentials):
                 MAX_ITEMS=5))
     
     
-    resps = batch_query(credentials, queries)
+    resps = batch_query(http_factory, queries)
     for response in resps:
         _pretty_print_response(*response)
 
-def _test_chain_query(youtube, credentials):
+def _test_chain_query(youtube, http_factory):
     #TODO complete
     pass
 
-def _test_response_stream(youtube, credentials):
+def _test_response_stream(youtube, http_factory):
     queries = [Query(youtube.playlistItems().list, {"part":"snippet",
                            "maxResults":"2",
                            "playlistId":"UUVtt6C8Qu_ia7g2l80sY2kQ",
@@ -275,8 +274,7 @@ def _test_response_stream(youtube, credentials):
     def on_response_func(for_query, request, response):
         _pretty_print_response(for_query, request, response)
     
-    pool = RequestThreadPool(authorized_http_factory(credentials), 
-                             on_response_func)    
+    pool = RequestThreadPool(http_factory, on_response_func)    
     with pool:
         # Put requests into task queue
         for q in queries:
@@ -298,9 +296,10 @@ def main(argv):
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
         http=credentials.authorize(httplib2.Http()))
     
-    #_test_batch_query(youtube, credentials)
-    #_test_batch_query_paging(youtube, credentials)
-    _test_response_stream(youtube, credentials)
+    http_factory = authorized_http_factory(credentials)
+    #_test_batch_query(youtube, http_factory)
+    #_test_batch_query_paging(youtube, http_factory)
+    _test_response_stream(youtube, http_factory)
     
 
 
