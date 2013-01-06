@@ -107,8 +107,8 @@ def _clear_queue_tasks(queue):
 class RequestThreadPool:
     """Creates a thread pool to process api requests.
     Used with with statement."""
-    def __init__(self, credentials, on_response_func, thread_count=NUM_THREADS):
-        self._credentials = credentials
+    def __init__(self, authorized_http_factory, on_response_func, thread_count=NUM_THREADS):
+        self._authorized_http_factory = authorized_http_factory
         self._THREAD_COUNT = thread_count
         self._on_response_func = on_response_func
 
@@ -137,8 +137,7 @@ class RequestThreadPool:
         logging.getLogger().debug('Exiting _process_responses thread')  
         
     def _process_requests(self):
-        http = httplib2.Http()
-        http = self._credentials.authorize(http)
+        http = self._authorized_http_factory()
         loop = True
 
         while not self._exit_event.is_set():
@@ -191,6 +190,9 @@ class RequestThreadPool:
         _clear_queue_tasks(self._response_queue)
         return False #Don't supress exceptions
 
+def authorized_http_factory(credentials):
+    return lambda : credentials.authorize(httplib2.Http())
+
 def batch_query(credentials, queries):
     '''Simple interface to RequestThreadPool to return a simple list of 
     responses to queries'''
@@ -199,9 +201,10 @@ def batch_query(credentials, queries):
     # TODO group by for_query:list of responses
     def on_response_func(for_query, request, response):
         ret.append((for_query, request, response))
-        
-    with RequestThreadPool(credentials, on_response_func) \
-            as pool:
+    
+    pool = RequestThreadPool(authorized_http_factory(credentials), 
+                             on_response_func)    
+    with pool:
         for q in queries:
             pool.put_request(q)
         pool.join()
@@ -272,8 +275,9 @@ def _test_response_stream(youtube, credentials):
     def on_response_func(for_query, request, response):
         _pretty_print_response(for_query, request, response)
     
-    with RequestThreadPool(credentials, on_response_func) \
-            as pool:
+    pool = RequestThreadPool(authorized_http_factory(credentials), 
+                             on_response_func)    
+    with pool:
         # Put requests into task queue
         for q in queries:
             pool.put_request(q)
