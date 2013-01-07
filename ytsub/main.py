@@ -40,7 +40,7 @@ def videoID(url_or_id):
         raise ValueError('Value must be a youtube video id or the watch url')
     return match.group(1)
 
-def _setup():
+def setup():
     CLIENT_SECRETS_FILE = "../data/client_secrets.json"
     SCOPES = "https://www.googleapis.com/auth/youtube"
     YOUTUBE_API_SERVICE_NAME = "youtube"
@@ -56,7 +56,7 @@ def _setup():
     return (youtube, credentials)
 
 def _list():
-    youtube, credentials = _setup()
+    youtube, credentials = setup()
     
     watched = api.get_watched_ids(youtube)
     new = api.get_sub_vids(youtube)
@@ -66,7 +66,7 @@ def _list():
         print v
 
 def _mark_watched():
-    youtube, credentials = _setup()
+    youtube, credentials = setup()
     print "you called mark-watched!"
     #TODO
 
