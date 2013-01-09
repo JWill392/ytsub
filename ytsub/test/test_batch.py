@@ -78,20 +78,21 @@ def _pretty_print_response(for_query, request, response):
 #TODO cleanup        
 youtube, credentials = setup()
 
-#TODO TODO TODO was here
-#class _QueryFlowNode:
-#    def __init__(
-
-#class QueryFlow:
-#    def __init__(self,):
-#        self.
-#    def inject(pool):
-#        '''Invoked within with pool (instance of RequestThreadPool)
-#        Injects queries from this flow that have no pre-requisite queries.'''
         
           
           
-          
+
+
+# some use cases: 
+# NOTE response = (query, request, response) (request is a page of a query)
+# NOTE three elements:  1. Query Gen - subs in data from pre-reqs to create a query
+#                       2. Query     - is created by QGEN. Could be multiple with diff params
+#                       3. Response  - (for_query, request(page of query), response). Could be multiple for query (paging)
+# NOTE Given one, can obtain others:  1 <--> 2 <--> 3
+# WAIT, actually there's another. Item.  
+# Query Gen could make multiple queries per response (eg one per item).  So here's a question.  How to uniquely identify Querys?  Okay, step back a second.  Why do we want to uniquely identify queries? TODO 
+# Right now I want to consider the datastructure that will hold each response.  Pushed into once per on_response_func()
+       
           
 # NOTE I'd like to be able to join together diff query flows -- use as prerequisites.
 # EXAMPLE: Fetching watched_videos is a two-step process I see myself using in several larger query flows.  And I don't want to rewrite it every time.
@@ -103,90 +104,71 @@ class TestBatch(unittest.TestCase):
                 q2 is input for q4.  
                 q4 and q3 are input for q5, the output'''
         
-        query_children = {'my_playlists':['watched_videos'],
-                          'sub_channels':['channel_upload_id'],
-                          'channel_upload_id':['uploaded_videos']}
-        
-        # TODO Multiplicity. This doesn't work if we want to get vids from /all/ subs.  it only gets from one.
-        # Will need to specify if we need to wait for every page, or can do for each page individually
-        # TODO turn into class.  QueryFlow, perhaps.  Consider DSL for dependencies.
+       #HOW I WANT IT TO WORK
+        # TODO okay, this structure won't work with multiple requirements.  Perhaps instead of the .single_item and .each_item pre-made functions, we simply make the user write a _on_response function.  It's the basic stupid solution, so we'll see how it works out.
 
         
-        def build_dependent_query(req_resps, query_id):
-            if query_id is 'my_playlists':
-                q = Query(youtube.channels().list,
-                          {'mine':True,
-                           'part':'contentDetails'},
-                          name=query_id)
-                          
-            elif query_id is 'watched_videos':
-                history_id = req_resps['my_playlists']["items"][0] \
-                                      ["contentDetails"]["relatedPlaylists"] \
-                                      ["watchHistory"]
-            
-                q = Query(youtube.playlistItems().list,
-                          {'playlistId':history_id,
-                           'part':'id',
-                           'fields':"items(id,kind),nextPageToken"},
-                          MAX_ITEMS=100,
-                          name=query_id)
-            
-            elif query_id is 'sub_channels':
-                q = Query(youtube.subscriptions().list, 
-                          {'mine':True,
-                           'part':'snippet',
-                           'order':'unread',
-                           'fields':'items/snippet,nextPageToken'},
-                          MAX_ITEMS=1,
-                          name=query_id)
-                             
-                             
-            elif query_id is 'channel_upload_id':
-                sub_channel_id = req_resps['sub_channels']['items'][0]['snippet']['resourceId']['channelId']
-                
-                q = Query(youtube.channels().list,
-                             {'id': sub_channel_id,
-                              'part':'contentDetails',
-                              'fields':'items/contentDetails'},
-                             MAX_ITEMS=1,
-                             name=query_id)
-                
-                
-            elif query_id is 'uploaded_videos':
-                channel_upload_id = req_resps['channel_upload_id']['items'][0]['contentDetails']['relatedPlaylists']['uploads']
-                q = Query(youtube.playlistItems().list,
-                                  {'playlistId':channel_upload_id,
+
+        #ROOT
+        get_playlists = (youtube.channels().list, 
+                                 {'mine':True,
+                                  'part':'contentDetails'})
+        
+        get_watched = flow.add(youtube.playlistItems().list,
+                               {'playlistId':'{history_id}',
+                                'part':'id',
+                                'fields':"items(id,kind),nextPageToken"},
+                               MAX_ITEMS=100,
+                               history_id=get_playlists.single_item(index=("contentDetails",
+                                                                    "relatedPlaylists","watchHistory")))
+        #ROOT
+        sub_channels = flow.add(youtube.subscriptions().list, 
+                                {'mine':True,
+                                 'part':'snippet',
+                                 'order':'unread',
+                                 'fields':'items/snippet,nextPageToken'})
+        
+        # TODO ability to not query certain subs -- probably would mean letting user implement a (added flow).each_item type function.  Or perhaps one could accept a filterfunc
+        upload_ids = flow.add(youtube.channels().list,
+                              {'id': '{sub_channel_id}',
+                               'part':'contentDetails',
+                               'fields':'items/contentDetails'},
+                              sub_channel_id=sub_channels.each_item(index=('snippet','resourceId','channelId')))
+         
+         uploaded_vids = flow.add(youtube.playlistItems().list,
+                                  {'playlistId':'{upload_id}',
                                    'part':'snippet'},
                                   MAX_ITEMS=10,
-                                  name=query_id)
-            else:
-                raise ValueError('Query id {qid} does not exist'.format(qid=query_id))
-            
-            logging.getLogger().debug('chain query: adding next query: ' + q.get_name())
-            return q
+                                  upload_id=upload_ids.single_item(index=('contentDetails','relatedPlaylists',
+                                                                          'uploads')))
+         
+         vid_stats = flow.add(youtube.videos().list,
+                              {'id':'{vid_ids}',
+                               'part':'statistics'} #TODO this won't do.
+                              vid_ids=uploaded_vids.all_batch(50, index=('snippet','resourceId','videoId'))
+        #single_item asserts only one item in response -- pretty common pattern in youtube apis
         
-        resps = {}
-        resps_lock = RLock()
+        query_response = {}
+        gen_query = {}
+        
         
         def on_response_func(for_query, request, response):
-            for_name = for_query.get_name()
-            child_queries = query_children.get(for_name)
-
-            with resps_lock:
-                if resps.get(for_name) is None:
-                    resps[for_name] = [(for_query, request, response)]
-                else:
-                    resps[for_name].append((for_query, request, response))
-
-            if child_queries is None:
-                print 'END!'
-                return
-            
-            for cq_name in child_queries:
-                #TODO should prolly include request for paging
-                next_query = build_dependent_query({for_name:response}, cq_name)
+            kwargs = {'for_query': for_query,
+                      'request'  : request,
+                      'response' : response}
+                      
+            query_response[for_query]['by_request'] [request] = kwargs
+            query_response[for_query]['by_response'][response] = kwargs
+            #TODO Jan 7, 9AM: was mocking this up to see how datastructures would be structured. q_resp and gen_q just written
                 
-                pool.put_request(next_query)
+            for gen in generators:
+                q = gen(for_query, request, response)
+                if q is not None:
+                    gen_query[gen]['by_query']   [for_query] = q
+                    gen_query[gen]['by_request'] [request]   = q
+                    gen_query[gen]['by_response'][response]  = q
+                    
+                    
         
         #TODO realify
         pool = RequestThreadPool(get_http_factory(credentials), on_response_func)    
