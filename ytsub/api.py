@@ -32,15 +32,17 @@ class _UploadPlaylist:
                 channel_list_response["items"][0]["contentDetails"]\
                 ["relatedPlaylists"]["uploads"]
 
+def get_user_playlists(youtube):
+    return youtube.channels().list(
+        mine=True,
+        part="contentDetails"
+     ).execute()['items'][0]['contentDetails']['relatedPlaylists']
+    
+
 def get_watched_ids(youtube):
     ret = []
 
-    playlists_response = youtube.channels().list(
-        mine=True,
-        part="contentDetails"
-     ).execute()
-
-    id_watch_history_playlist = playlists_response["items"][0]["contentDetails"]["relatedPlaylists"]["watchHistory"]
+    id_watch_history_playlist = get_user_playlists(youtube)["watchHistory"]
 
     query = youtube.playlistItems().list(
         playlistId=id_watch_history_playlist,
@@ -122,3 +124,17 @@ def get_sub_vids(youtube):
         ret.extend(get_videos_in_playlist(youtube, up, 20, 10))
         
     return ret
+
+def mark_watched(youtube, history_playlist, vid):
+    return youtube.playlistItems().insert(part='snippet', 
+                                              body={'snippet':{'playlistId':history_playlist,
+                                                               'resourceId': {'videoId':vid,
+                                                                              'kind':'youtube#video'}}}).execute()
+    
+    
+    
+    
+    
+    
+    
+    
