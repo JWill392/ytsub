@@ -23,6 +23,7 @@ import api
 import logging
 import fileinput
 import re
+import pprint
 
 from __init__ import __version__
 from apiclient.discovery import build
@@ -34,10 +35,16 @@ __VID_REGEX = re.compile(r'^(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?'
                          r'v=)?([a-zA-Z0-9_-]{11})\S*$')
 __LOG_LEVELS = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
 
+def days(strin):
+    ret = int(strin)
+    if ret < 0:
+        raise ValueError('Days must be greater than or equal to 0.')
+    return ret
+
 def videoID(url_or_id):
     match = __VID_REGEX.match(url_or_id)
     if not match:
-        raise ValueError('Value must be a youtube video id or the watch url')
+        raise ValueError('Value must be a youtube video id or the watch url.')
     return match.group(1)
 
 def setup():
@@ -55,9 +62,10 @@ def setup():
         
     return (youtube, credentials)
 
-def _list():
+def _list(args):
     youtube, credentials = setup()
     
+    #TODO use args.age_max
     watched = api.get_watched_ids(youtube)
     new = api.get_sub_vids(youtube)
     unwatched_new = filter(lambda x: x.id not in watched, new)
@@ -65,10 +73,13 @@ def _list():
     for v in unwatched_new:
         print v
 
-def _mark_watched():
+def _mark_watched(args):
     youtube, credentials = setup()
-    print "you called mark-watched!"
-    #TODO
+    
+    history_playlist = api.get_user_playlists(youtube)["watchHistory"]
+    for vid in args.ids:
+        resp = api.mark_watched(youtube, history_playlist, vid)
+        pprint.pprint(resp)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -96,6 +107,14 @@ def main():
     list_parser = subparsers.add_parser('list',
                                         description='List your new Youtube '
                                                     'subscription videos.')
+    
+    list_parser.add_argument('-t', '--upload-time',
+                             help='Limit to videos no older than N days',
+                             type=int,
+                             default=5,
+                             metavar='N',
+                             dest='age_max')
+    
     list_parser.set_defaults(func=_list)
     
     # SUBCOMMAND mark-watched
@@ -121,7 +140,7 @@ def main():
     
     print args
     
-    args.func()
+    args.func(args)
         
     #watched = api.get_watched_ids(youtube)
     #new = api.get_sub_vids(youtube)
