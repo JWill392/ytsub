@@ -35,13 +35,27 @@ __VID_REGEX = re.compile(r'^(?:(?:(?:http://)?www\.)?youtube\.com/watch\?\S*?'
                          r'v=)?([a-zA-Z0-9_-]{11})\S*$')
 __LOG_LEVELS = ('CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG')
 
-def days(strin):
-    ret = int(strin)
+def _days(strin):
+    try:
+        ret = int(strin)
+    except ValueError:
+        raise argparse.ArgumentTypeError('Days must be an integer. Given: ' + strin)
+    
     if ret < 0:
-        raise ValueError('Days must be greater than or equal to 0.')
+        raise argparse.ArgumentTypeError('Days must be greater than or equal to 0. Given: ' + strin)
     return ret
 
-def videoID(url_or_id):
+def _vid_count(strin):
+    try:
+        ret = int(strin)
+    except ValueError:
+        raise argparse.ArgumentTypeError('Video count must be an integer.')
+    
+    if ret < 0:
+        raise argparse.ArgumentTypeError('Days must be greater than or equal to 0.')
+    return ret
+
+def _videoID(url_or_id):
     match = __VID_REGEX.match(url_or_id)
     if not match:
         raise ValueError('Value must be a youtube video id or the watch url.')
@@ -65,9 +79,8 @@ def _setup():
 def _list(args):
     youtube, credentials = _setup()
     
-    #TODO use args.age_max
     watched = api.get_watched_ids(youtube)
-    new = api.get_sub_vids(youtube)
+    new = api.get_sub_vids(youtube, args.max_vids_per_sub, args.age_max)
     unwatched_new = filter(lambda x: x.id not in watched, new)
     unwatched_new.sort(reverse=True)
     for v in unwatched_new:
@@ -109,11 +122,26 @@ def main():
                                                     'subscription videos.')
     
     list_parser.add_argument('-t', '--upload-time',
-                             help='Limit to videos no older than N days',
-                             type=int,
+                             help='Limit to videos no older than N days. If '
+                                  'option present with no argument, not '
+                                  'limited.',
+                             type=_days,
                              default=5,
+                             const=-1,
+                             nargs='?',
                              metavar='N',
                              dest='age_max')
+                                 
+    list_parser.add_argument('-c', '--vid-count',
+                             help='Limit to N videos from each subscription. '
+                                  'If option present with no argument, not '
+                                  'limited.',
+                             type=_vid_count,
+                             default=50,
+                             const=-1,
+                             nargs='?',
+                             metavar='N',
+                             dest='max_vids_per_sub')
     
     list_parser.set_defaults(func=_list)
     
@@ -122,7 +150,7 @@ def main():
                                                 description='Mark video ids as'
                                                             ' watched.')
     mark_watched_parser.add_argument('ids',
-                                     type=videoID,
+                                     type=_videoID,
                                      action=ListOrStdinAction, 
                                      metavar='Video ID')
     mark_watched_parser.set_defaults(func=_mark_watched)

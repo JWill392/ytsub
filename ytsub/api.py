@@ -90,20 +90,27 @@ def get_upload_playlist_of_channel(youtube, channel):
     return _UploadPlaylist(channel, channel_list_response)
 
 def get_videos_in_playlist(youtube, playlist, MAX_VIDS, MAX_AGE):
+    assert MAX_VIDS >= -1
+    assert MAX_AGE >= -1
+
     ret = []
     
+    # filtering
     vidcount = 0
+    cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
+        
     query = youtube.playlistItems().list(
             playlistId=playlist.playlist_id,
             part="snippet",
             maxResults=50)
-    while (query is not None) and (vidcount < MAX_VIDS):
+    
+    # page through results
+    while (query is not None) and ((MAX_VIDS is -1) or (vidcount < MAX_VIDS)):
         playlist_contents_response = query.execute()
         
-        cutoff_date = datetime.now() - timedelta(MAX_AGE) #days
         for playlist_video in playlist_contents_response["items"]:
             video = Vid(playlist.author_name, playlist_video)
-            if (video.date < cutoff_date):
+            if (MAX_AGE is not -1) and (video.date < cutoff_date):
                 break
             ret.append(video)
         vidcount += len(playlist_contents_response["items"])
@@ -111,7 +118,7 @@ def get_videos_in_playlist(youtube, playlist, MAX_VIDS, MAX_AGE):
     
     return ret
 
-def get_sub_vids(youtube):
+def get_sub_vids(youtube, MAX_VIDS, MAX_AGE):
     ret = []
     
     channels = get_updated_channels(youtube)
@@ -121,7 +128,7 @@ def get_sub_vids(youtube):
         upload_playlists.append(get_upload_playlist_of_channel(youtube, ch))
     
     for up in upload_playlists:
-        ret.extend(get_videos_in_playlist(youtube, up, 20, 10))
+        ret.extend(get_videos_in_playlist(youtube, up, MAX_VIDS, MAX_AGE))
         
     return ret
 
