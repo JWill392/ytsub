@@ -32,17 +32,17 @@ class _UploadPlaylist:
                 channel_list_response["items"][0]["contentDetails"]\
                 ["relatedPlaylists"]["uploads"]
 
-def get_user_playlists(youtube):
+def get_user_playlists(youtube, credentials):
     return youtube.channels().list(
         mine=True,
         part="contentDetails"
      ).execute()['items'][0]['contentDetails']['relatedPlaylists']
     
 
-def get_watched_ids(youtube):
+def get_watched_ids(youtube, credentials):
     ret = []
 
-    id_watch_history_playlist = get_user_playlists(youtube)["watchHistory"]
+    id_watch_history_playlist = get_user_playlists(youtube, credentials)["watchHistory"]
 
     query = youtube.playlistItems().list(
         playlistId=id_watch_history_playlist,
@@ -60,7 +60,7 @@ def get_watched_ids(youtube):
         
     return ret
 
-def get_updated_channels(youtube):
+def get_updated_channels(youtube, credentials):
     updated_channels = []
     
     next_page_token = ""
@@ -80,7 +80,7 @@ def get_updated_channels(youtube):
 
     return updated_channels
 
-def get_upload_playlist_of_channel(youtube, channel):
+def get_upload_playlist_of_channel(youtube, credentials, channel):
     channel_list_response = youtube.channels().list(
         id=channel.channel_id,
         part="contentDetails",
@@ -89,7 +89,7 @@ def get_upload_playlist_of_channel(youtube, channel):
         ).execute()
     return _UploadPlaylist(channel, channel_list_response)
 
-def get_videos_in_playlist(youtube, playlist, MAX_VIDS, MAX_AGE):
+def get_videos_in_playlist(youtube, credentials, playlist, MAX_VIDS, MAX_AGE):
     assert MAX_VIDS >= -1
     assert MAX_AGE >= -1
 
@@ -126,22 +126,22 @@ def get_videos_in_playlist(youtube, playlist, MAX_VIDS, MAX_AGE):
     
     return ret
 
-def get_sub_vids(youtube, MAX_VIDS, MAX_AGE):
+def get_sub_vids(youtube, credentials, MAX_VIDS, MAX_AGE):
     ret = []
     
-    channels = get_updated_channels(youtube)
+    channels = get_updated_channels(youtube, credentials)
     
     upload_playlists = []
     for ch in channels:
-        upload_playlists.append(get_upload_playlist_of_channel(youtube, ch))
+        upload_playlists.append(get_upload_playlist_of_channel(youtube, credentials, ch))
     
     for up in upload_playlists:
-        ret.extend(get_videos_in_playlist(youtube, up, MAX_VIDS, MAX_AGE))
+        ret.extend(get_videos_in_playlist(youtube, credentials, up, MAX_VIDS, MAX_AGE))
         
     return ret
 
-def mark_watched(youtube, vids):
-    history_playlist = get_user_playlists(youtube)["watchHistory"]
+def mark_watched(youtube, credentials, vids):
+    history_playlist = get_user_playlists(youtube, credentials)["watchHistory"]
     
     for vid in vids:
         youtube.playlistItems().insert(part='snippet', 
