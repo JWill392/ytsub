@@ -44,25 +44,52 @@ import time
 # How many threads to use
 NUM_THREADS = 3
 
-# TODO decide-if-enough-items function passed in by user.  Want to stop once reaching certain date of uploaded videos, or number.
-class Query:
-    def __init__(self, request_function, kwargs, MAX_ITEMS=100, name=''):
-        self._request_function = request_function
-        self._item_count = 0
+class QueryLimit:
+    def __call__(self, for_query, request, response):
+        '''Called before request.  First invocation is before first request.'''
+        pass
+    
+
+class QueryLimitCount(QueryLimit):
+    def __init__(self, MAX_ITEMS):
         self._MAX_ITEMS = MAX_ITEMS
+        self._item_count = 0
+    
+    def __call__(self, for_query, request, response):
+        # prevent last fetch overshoot
+        for_query._kwargs['maxResults'] = \
+                min(int(for_query._kwargs['maxResults']), self._MAX_ITEMS - self._item_count)
+        
+        # first call -- still want to set maxResults
+        if response is None:
+            return
+            
+        try:
+            self._item_count += len(response['items'])
+        except KeyError:
+            pass # no items
+            
+        # done if item max reached
+        if self._item_count == self._MAX_ITEMS:
+            for_query._done = "received MAX_ITEMS items (%i)" % self._item_count
+
+class Query:
+    def __init__(self, request_function, kwargs, limit=QueryLimit(), name=''):
+        self._request_function = request_function
         self._done = ''
         self._name = name
+        self._limit = limit
         
         # adjusted down later if MAX_ITEMS less than 50
         if 'maxResults' not in kwargs:
             kwargs['maxResults'] = 50
         self._kwargs = kwargs
+        
+        # setup for first call to limit -- before first request
+        self._last_response = (self, self.get_last_request(), None)
     
     def get_name(self):
         return self._name
-    
-    def get_total_items(self):
-        return self._item_count
     
     #TODO raise error if haven't yet called next
     def get_last_request(self):
@@ -70,28 +97,19 @@ class Query:
                 'kwargs':deepcopy(self._kwargs)}
     
     def request_next_page(self, http):
+        # if not already stopping, check if need to stop
+        if not self._done:
+            self._limit(*self._last_response)
+    
         if self._done:
             raise StopIteration(self._done)
     
         if http is None:
             raise ValueError("http is None")
     
-        # prevent last fetch overshoot
-        self._kwargs['maxResults'] = \
-                min(int(self._kwargs['maxResults']), self._MAX_ITEMS - self._item_count)
-    
         # send REST API request and wait for response
         response = self._request_function(**self._kwargs).execute(http=http)
-        try:
-            self._item_count += len(response['items'])
-        except KeyError:
-            pass # no items
-
-        
-        # done if client-imposed item max reached
-        if self.get_total_items() == self._MAX_ITEMS:
-            self._done = "received MAX_ITEMS items (%i)" % self._item_count
-            return response
+        self._last_response = response
             
         # done if server exhausted (no more items avail)
         if 'nextPageToken' not in response:
@@ -101,6 +119,7 @@ class Query:
         # not done; page query kwargs
         self._kwargs["pageToken"] = response["nextPageToken"]
         return response
+   
 
 def _clear_queue(queue):
     try:

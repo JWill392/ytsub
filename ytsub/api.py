@@ -16,9 +16,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with ytsub.  If not, see <http://www.gnu.org/licenses/>.
 
-from ytsub.batch import Query
-from ytsub.batch import batch_query
-from ytsub.batch import get_http_factory
+import ytsub.batch as batch
+
 from video import Vid
 from datetime import datetime
 from datetime import timedelta
@@ -84,11 +83,11 @@ def get_updated_channels(youtube, credentials):
     return updated_channels
 
 def channel_playlists_query(youtube, credentials, channel):
-    return Query(youtube.channels().list, 
+    return batch.Query(youtube.channels().list, 
                  {'id':channel.channel_id,
                   'part':'contentDetails',
-                  'fields':'items/contentDetails',
-                  'maxResults':1})
+                  'fields':'items/contentDetails'},
+                  limit=batch.QueryLimitCount(1))
 
 def get_videos_in_playlist(youtube, credentials, playlist, MAX_VIDS, MAX_AGE):
     assert MAX_VIDS >= -1
@@ -138,7 +137,7 @@ def get_sub_vids(youtube, credentials, MAX_VIDS, MAX_AGE):
         q._name = ch
         playlist_queries.append(q)
     
-    resps = batch_query(get_http_factory(credentials), playlist_queries)
+    resps = batch.batch_query(batch.get_http_factory(credentials), playlist_queries)
     upload_playlists = [_UploadPlaylist(r[0]._name, r[2]) for r in resps]
     
     for up in upload_playlists:
