@@ -131,6 +131,7 @@ class RequestThreadPool:
         
         for i in range(self._THREAD_COUNT):
             req_thread = threading.Thread(target=self._process_requests)
+            req_thread.daemon = True
             self._req_threads.append(req_thread)
         
     
