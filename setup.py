@@ -24,7 +24,7 @@ setup(
     author='Jackson Williams',
     author_email='jackson.r.williams+ytsub@gmail.com',
     version=__version__,
-    packages=['ytsub', 'ytsub.test'],
+    packages=['ytsub'],
     license='LICENSE.txt',
     description='List your Youtube subscription videos',
     long_description=open('README.txt').read(),
