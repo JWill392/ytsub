@@ -180,7 +180,7 @@ class RequestThreadPool:
                         break
                     http_failures += 1
                     logging.getLogger().info("Increasing backoff, got status code: %d" % e.resp.status)
-                    time.sleep((2 ** http_failures) * 0.1 + (random.random() * 0.25))
+                    time.sleep((2 ** http_failures) * 0.1 * (random.random() * 0.1 + 0.95))
                 except Exception, e:
                     logging.getLogger().critical("Unexpected error in process_requests thread. Exiting. " + str(e))
                     self.__exit__(*sys.exc_info())
