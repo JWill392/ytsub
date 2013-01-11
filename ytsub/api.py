@@ -16,6 +16,9 @@
 #  You should have received a copy of the GNU General Public License
 #  along with ytsub.  If not, see <http://www.gnu.org/licenses/>.
 
+from ytsub.batch import Query
+from ytsub.batch import batch_query
+from ytsub.batch import get_http_factory
 from video import Vid
 from datetime import datetime
 from datetime import timedelta
@@ -80,14 +83,12 @@ def get_updated_channels(youtube, credentials):
 
     return updated_channels
 
-def get_upload_playlist_of_channel(youtube, credentials, channel):
-    channel_list_response = youtube.channels().list(
-        id=channel.channel_id,
-        part="contentDetails",
-        fields="items/contentDetails",
-        maxResults=1
-        ).execute()
-    return _UploadPlaylist(channel, channel_list_response)
+def channel_playlists_query(youtube, credentials, channel):
+    return Query(youtube.channels().list, 
+                 {'id':channel.channel_id,
+                  'part':'contentDetails',
+                  'fields':'items/contentDetails',
+                  'maxResults':1})
 
 def get_videos_in_playlist(youtube, credentials, playlist, MAX_VIDS, MAX_AGE):
     assert MAX_VIDS >= -1
@@ -131,9 +132,14 @@ def get_sub_vids(youtube, credentials, MAX_VIDS, MAX_AGE):
     
     channels = get_updated_channels(youtube, credentials)
     
-    upload_playlists = []
+    playlist_queries = []
     for ch in channels:
-        upload_playlists.append(get_upload_playlist_of_channel(youtube, credentials, ch))
+        q = channel_playlists_query(youtube, credentials, ch)
+        q._name = ch
+        playlist_queries.append(q)
+    
+    resps = batch_query(get_http_factory(credentials), playlist_queries)
+    upload_playlists = [_UploadPlaylist(r[0]._name, r[2]) for r in resps]
     
     for up in upload_playlists:
         ret.extend(get_videos_in_playlist(youtube, credentials, up, MAX_VIDS, MAX_AGE))
