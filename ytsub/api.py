@@ -140,11 +140,14 @@ def get_sub_vids(youtube, MAX_VIDS, MAX_AGE):
         
     return ret
 
-def mark_watched(youtube, history_playlist, vid):
-    return youtube.playlistItems().insert(part='snippet', 
-                                              body={'snippet':{'playlistId':history_playlist,
-                                                               'resourceId': {'videoId':vid,
-                                                                              'kind':'youtube#video'}}}).execute()
+def mark_watched(youtube, vids):
+    history_playlist = get_user_playlists(youtube)["watchHistory"]
+    
+    for vid in vids:
+        youtube.playlistItems().insert(part='snippet', 
+                                       body={'snippet':{'playlistId':history_playlist,
+                                                        'resourceId': {'videoId':vid,
+                                                                       'kind':'youtube#video'}}}).execute()
     
     
     
