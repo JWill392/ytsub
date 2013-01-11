@@ -32,6 +32,7 @@ import logging
 import sys
 import threading
 import time
+import collections
 
 #TODO use priority queue.  In cmd-line application, would allow us to stream output (useful for using with pipes, if some other time-intensive task uses this as input).  Prioritize depth-first rather than bredth-first.  Perhaps just a bool option?  I dunno when you'd want bredth rather than depth first, though.
 # NOTE the problem with this is if we wanted to sort the output.  BUT the unix philosophy says we shouldn't.  A tool like sort should do that. Which is convenient for streaming output!
@@ -78,6 +79,10 @@ class Query:
         self._request_function = request_function
         self._done = ''
         self._name = name
+        
+        # accept multiple limit functions -- and ensure singles are iterable
+        if not isinstance(limit, collections.Iterable):
+            limit = (limit,)
         self._limit = limit
         
         # adjusted down later if MAX_ITEMS less than 50
@@ -99,7 +104,10 @@ class Query:
     def request_next_page(self, http):
         # if not already stopping, check if need to stop
         if not self._done:
-            self._limit(*self._last_response)
+            for l in self._limit:
+                l(*self._last_response)
+                if self._done:
+                    break
     
         if self._done:
             raise StopIteration(self._done)
