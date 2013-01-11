@@ -91,9 +91,7 @@ def _list(args):
 def _mark_watched(args):
     youtube, credentials = _setup()
     
-    history_playlist = api.get_user_playlists(youtube)["watchHistory"]
-    for vid in args.ids:
-        api.mark_watched(youtube, history_playlist, vid)
+    api.mark_watched(youtube, args.ids)
 
 def main():
     parser = argparse.ArgumentParser(
