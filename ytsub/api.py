@@ -81,7 +81,7 @@ def get_updated_channels(youtube):
     return updated_channels
 
 def get_upload_playlist_of_channel(youtube, channel):
-    channel_list_response = id_uploads = youtube.channels().list(
+    channel_list_response = youtube.channels().list(
         id=channel.channel_id,
         part="contentDetails",
         fields="items/contentDetails",
