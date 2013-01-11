@@ -89,46 +89,46 @@ def channel_playlists_query(youtube, credentials, channel):
                   'fields':'items/contentDetails'},
                   limit=batch.QueryLimitCount(1))
 
-def get_videos_in_playlist(youtube, credentials, playlist, MAX_VIDS, MAX_AGE):
+def get_videos_in_playlists(youtube, credentials, playlist_list, MAX_VIDS, MAX_AGE):
     assert MAX_VIDS >= -1
     assert MAX_AGE >= -1
 
     ret = []
     
-    query = youtube.playlistItems().list(
-            playlistId=playlist.playlist_id,
-            part="snippet",
-            maxResults=10)
-            
-    # filtering
-    vidcount = 0
-    cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
-    run = True        
+    for playlist in playlist_list:
     
-    # page through results
-    while run and (query is not None):
-        playlist_contents_response = query.execute()
-        
-        for playlist_video in playlist_contents_response["items"]:
-            if (vidcount != -1) and (vidcount == MAX_VIDS):
-                run = False
-                break
-            
-            video = Vid(playlist.author_name, playlist_video)
-            if (MAX_AGE is not -1) and (video.date < cutoff_date):
-                run = False
-                break
+        query = youtube.playlistItems().list(
+                playlistId=playlist.playlist_id,
+                part="snippet",
+                maxResults=10)
                 
-            ret.append(video)
-            vidcount += 1
+        # filtering
+        vidcount = 0
+        cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
+        run = True        
+        
+        # page through results
+        while run and (query is not None):
+            playlist_contents_response = query.execute()
             
-        query = youtube.playlistItems().list_next(query, playlist_contents_response)
+            for playlist_video in playlist_contents_response["items"]:
+                if (vidcount != -1) and (vidcount == MAX_VIDS):
+                    run = False
+                    break
+                
+                video = Vid(playlist.author_name, playlist_video)
+                if (MAX_AGE is not -1) and (video.date < cutoff_date):
+                    run = False
+                    break
+                    
+                ret.append(video)
+                vidcount += 1
+                
+            query = youtube.playlistItems().list_next(query, playlist_contents_response)
     
     return ret
 
 def get_sub_vids(youtube, credentials, MAX_VIDS, MAX_AGE):
-    ret = []
-    
     channels = get_updated_channels(youtube, credentials)
     
     playlist_queries = []
@@ -140,10 +140,7 @@ def get_sub_vids(youtube, credentials, MAX_VIDS, MAX_AGE):
     resps = batch.batch_query(batch.get_http_factory(credentials), playlist_queries)
     upload_playlists = [_UploadPlaylist(r[0]._name, r[2]) for r in resps]
     
-    for up in upload_playlists:
-        ret.extend(get_videos_in_playlist(youtube, credentials, up, MAX_VIDS, MAX_AGE))
-        
-    return ret
+    return get_videos_in_playlists(youtube, credentials, upload_playlists, MAX_VIDS, MAX_AGE)
 
 def mark_watched(youtube, credentials, vids):
     history_playlist = get_user_playlists(youtube, credentials)["watchHistory"]
