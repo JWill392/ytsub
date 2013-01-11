@@ -57,6 +57,9 @@ class QueryLimitCount(QueryLimit):
         self._item_count = 0
     
     def __call__(self, for_query, request, response):
+        if self._item_count == -1:
+            return
+    
         # prevent last fetch overshoot
         for_query._kwargs['maxResults'] = \
                 min(int(for_query._kwargs['maxResults']), self._MAX_ITEMS - self._item_count)
@@ -117,7 +120,7 @@ class Query:
     
         # send REST API request and wait for response
         response = self._request_function(**self._kwargs).execute(http=http)
-        self._last_response = response
+        self._last_response = (self, self.get_last_request(), response)
             
         # done if server exhausted (no more items avail)
         if 'nextPageToken' not in response:
@@ -270,16 +273,6 @@ def batch_query(http_factory, queries):
         pool.do_processing()
     
     return ret
-
-
-
-#def _pretty_print_batch_query_responses(resps):
-#    for query, response_book in resps.items():
-#        print '\n==============='
-#        print query
-#        for i, response_page in enumerate(response_book):
-#            print 'PAGE', i
-#            pprint(response_page['response'])    
 
 
 

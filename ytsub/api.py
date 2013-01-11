@@ -93,40 +93,27 @@ def get_videos_in_playlists(youtube, credentials, playlist_list, MAX_VIDS, MAX_A
     assert MAX_VIDS >= -1
     assert MAX_AGE >= -1
 
-    ret = []
+    # FIXME MAX_AGE was removed on batchifying this.  TODO write QueryLimitDate and use here
+
+    playlist_queries = []
     
     for playlist in playlist_list:
+        query = batch.Query(youtube.playlistItems().list,
+                            {'playlistId':playlist.playlist_id,
+                             'part':'snippet'},
+                            limit=batch.QueryLimitCount(MAX_VIDS))
+        query._name = playlist
+        playlist_queries.append(query)
     
-        query = youtube.playlistItems().list(
-                playlistId=playlist.playlist_id,
-                part="snippet",
-                maxResults=10)
-                
-        # filtering
-        vidcount = 0
-        cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
-        run = True        
+    resps = batch.batch_query(batch.get_http_factory(credentials), playlist_queries)
+    uploaded_vids = []
+    for r in resps:
+        author = r[0]._name.author_name
+        response = r[2]
         
-        # page through results
-        while run and (query is not None):
-            playlist_contents_response = query.execute()
-            
-            for playlist_video in playlist_contents_response["items"]:
-                if (vidcount != -1) and (vidcount == MAX_VIDS):
-                    run = False
-                    break
-                
-                video = Vid(playlist.author_name, playlist_video)
-                if (MAX_AGE is not -1) and (video.date < cutoff_date):
-                    run = False
-                    break
-                    
-                ret.append(video)
-                vidcount += 1
-                
-            query = youtube.playlistItems().list_next(query, playlist_contents_response)
+        uploaded_vids.extend([Vid(author, item) for item in response['items']])
     
-    return ret
+    return uploaded_vids
 
 def get_sub_vids(youtube, credentials, MAX_VIDS, MAX_AGE):
     channels = get_updated_channels(youtube, credentials)
