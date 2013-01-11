@@ -1,2 +1,2 @@
 include *.txt
-recursive-include data *
+include ytsub/data/*

@@ -17,7 +17,7 @@
 #  along with ytsub.  If not, see <http://www.gnu.org/licenses/>.
 
 from ytsub import __version__
-from distutils.core import setup
+from setuptools import setup
 
 setup(
     name='ytsub',
@@ -31,4 +31,10 @@ setup(
     install_requires=[
         "google-api-python-client >= 1.0"
     ],
+    entry_points = {
+        'console_scripts':
+            ['ytsub = ytsub.main:main']},
+    package_data = {
+        'ytsub':['data/client_secrets.json']
+    }
 )

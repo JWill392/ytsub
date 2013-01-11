@@ -61,15 +61,17 @@ def _videoID(url_or_id):
         raise ValueError('Value must be a youtube video id or the watch url.')
     return match.group(1)
 
+def _format_vid(format_string, vid):
+    return format_string.format(vid=vid.id, date=vid.date, title=vid.title, author=vid.author)
+
 def _setup():
-    CLIENT_SECRETS_FILE = "../data/client_secrets.json"
     SCOPES = "https://www.googleapis.com/auth/youtube"
     YOUTUBE_API_SERVICE_NAME = "youtube"
     YOUTUBE_API_VERSION = "v3"
 
     logging.basicConfig()
 
-    credentials = acquire_credentials(SCOPES, CLIENT_SECRETS_FILE)
+    credentials = acquire_credentials(SCOPES)
 
     youtube = build(YOUTUBE_API_SERVICE_NAME, YOUTUBE_API_VERSION,
         http=credentials.authorize(httplib2.Http()))
@@ -84,15 +86,14 @@ def _list(args):
     unwatched_new = filter(lambda x: x.id not in watched, new)
     unwatched_new.sort(reverse=True)
     for v in unwatched_new:
-        print v
+        print _format_vid("{vid}\t{date}\t{author}\t{title}", v)
 
 def _mark_watched(args):
     youtube, credentials = _setup()
     
     history_playlist = api.get_user_playlists(youtube)["watchHistory"]
     for vid in args.ids:
-        resp = api.mark_watched(youtube, history_playlist, vid)
-        pprint.pprint(resp)
+        api.mark_watched(youtube, history_playlist, vid)
 
 def main():
     parser = argparse.ArgumentParser(
@@ -164,19 +165,5 @@ def main():
     # handle verbose
     logging.getLogger().setLevel(__LOG_LEVELS[args.verbose])
     
-    
-    
-    print args
-    
     args.func(args)
-        
-    #watched = api.get_watched_ids(youtube)
-    #new = api.get_sub_vids(youtube)
-    #unwatched_new = filter(lambda x: x.id not in watched, new)
-    #unwatched_new.sort(reverse=True)
-    #for v in unwatched_new:
-    #    print v
-
-if __name__ == '__main__':
-    main()
 

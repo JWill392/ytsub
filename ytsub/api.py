@@ -95,25 +95,33 @@ def get_videos_in_playlist(youtube, playlist, MAX_VIDS, MAX_AGE):
 
     ret = []
     
-    # filtering
-    vidcount = 0
-    cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
-        
     query = youtube.playlistItems().list(
             playlistId=playlist.playlist_id,
             part="snippet",
-            maxResults=50)
+            maxResults=10)
+            
+    # filtering
+    vidcount = 0
+    cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
+    run = True        
     
     # page through results
-    while (query is not None) and ((MAX_VIDS is -1) or (vidcount < MAX_VIDS)):
+    while run and (query is not None):
         playlist_contents_response = query.execute()
         
         for playlist_video in playlist_contents_response["items"]:
+            if (vidcount != -1) and (vidcount == MAX_VIDS):
+                run = False
+                break
+            
             video = Vid(playlist.author_name, playlist_video)
             if (MAX_AGE is not -1) and (video.date < cutoff_date):
+                run = False
                 break
+                
             ret.append(video)
-        vidcount += len(playlist_contents_response["items"])
+            vidcount += 1
+            
         query = youtube.playlistItems().list_next(query, playlist_contents_response)
     
     return ret
