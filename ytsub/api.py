@@ -16,6 +16,8 @@
 #  You should have received a copy of the GNU General Public License
 #  along with ytsub.  If not, see <http://www.gnu.org/licenses/>.
 
+import ytsub.batch as batch
+
 from video import Vid
 from datetime import datetime
 from datetime import timedelta
@@ -32,17 +34,17 @@ class _UploadPlaylist:
                 channel_list_response["items"][0]["contentDetails"]\
                 ["relatedPlaylists"]["uploads"]
 
-def get_user_playlists(youtube):
+def get_user_playlists(youtube, credentials):
     return youtube.channels().list(
         mine=True,
         part="contentDetails"
      ).execute()['items'][0]['contentDetails']['relatedPlaylists']
     
 
-def get_watched_ids(youtube):
+def get_watched_ids(youtube, credentials):
     ret = []
 
-    id_watch_history_playlist = get_user_playlists(youtube)["watchHistory"]
+    id_watch_history_playlist = get_user_playlists(youtube, credentials)["watchHistory"]
 
     query = youtube.playlistItems().list(
         playlistId=id_watch_history_playlist,
@@ -60,7 +62,7 @@ def get_watched_ids(youtube):
         
     return ret
 
-def get_updated_channels(youtube):
+def get_updated_channels(youtube, credentials):
     updated_channels = []
     
     next_page_token = ""
@@ -80,76 +82,60 @@ def get_updated_channels(youtube):
 
     return updated_channels
 
-def get_upload_playlist_of_channel(youtube, channel):
-    channel_list_response = id_uploads = youtube.channels().list(
-        id=channel.channel_id,
-        part="contentDetails",
-        fields="items/contentDetails",
-        maxResults=1
-        ).execute()
-    return _UploadPlaylist(channel, channel_list_response)
+def channel_playlists_query(youtube, credentials, channel):
+    return batch.Query(youtube.channels().list, 
+                 {'id':channel.channel_id,
+                  'part':'contentDetails',
+                  'fields':'items/contentDetails'},
+                  limit=batch.QueryLimitCount(1))
 
-def get_videos_in_playlist(youtube, playlist, MAX_VIDS, MAX_AGE):
+def get_videos_in_playlists(youtube, credentials, playlist_list, MAX_VIDS, MAX_AGE):
     assert MAX_VIDS >= -1
     assert MAX_AGE >= -1
 
-    ret = []
+    playlist_queries = []
     
-    query = youtube.playlistItems().list(
-            playlistId=playlist.playlist_id,
-            part="snippet",
-            maxResults=10)
-            
-    # filtering
-    vidcount = 0
-    cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
-    run = True        
+    for playlist in playlist_list:
+        query = batch.Query(youtube.playlistItems().list,
+                            {'playlistId':playlist.playlist_id,
+                             'part':'snippet'},
+                            limit=(batch.QueryLimitCount(MAX_VIDS),
+                                   batch.QueryLimitAge(MAX_AGE)))
+        query._name = playlist
+        playlist_queries.append(query)
     
-    # page through results
-    while run and (query is not None):
-        playlist_contents_response = query.execute()
+    resps = batch.batch_query(batch.get_http_factory(credentials), playlist_queries)
+    uploaded_vids = []
+    for r in resps:
+        author = r[0]._name.author_name
+        response = r[2]
         
-        for playlist_video in playlist_contents_response["items"]:
-            if (vidcount != -1) and (vidcount == MAX_VIDS):
-                run = False
-                break
-            
-            video = Vid(playlist.author_name, playlist_video)
-            if (MAX_AGE is not -1) and (video.date < cutoff_date):
-                run = False
-                break
-                
-            ret.append(video)
-            vidcount += 1
-            
-        query = youtube.playlistItems().list_next(query, playlist_contents_response)
+        uploaded_vids.extend([Vid(author, item) for item in response['items']])
     
-    return ret
+    return uploaded_vids
 
-def get_sub_vids(youtube, MAX_VIDS, MAX_AGE):
-    ret = []
+def get_sub_vids(youtube, credentials, MAX_VIDS, MAX_AGE):
+    channels = get_updated_channels(youtube, credentials)
     
-    channels = get_updated_channels(youtube)
-    
-    upload_playlists = []
+    playlist_queries = []
     for ch in channels:
-        upload_playlists.append(get_upload_playlist_of_channel(youtube, ch))
+        q = channel_playlists_query(youtube, credentials, ch)
+        q._name = ch
+        playlist_queries.append(q)
     
-    for up in upload_playlists:
-        ret.extend(get_videos_in_playlist(youtube, up, MAX_VIDS, MAX_AGE))
-        
-    return ret
+    resps = batch.batch_query(batch.get_http_factory(credentials), playlist_queries)
+    upload_playlists = [_UploadPlaylist(r[0]._name, r[2]) for r in resps]
+    
+    return get_videos_in_playlists(youtube, credentials, upload_playlists, MAX_VIDS, MAX_AGE)
 
-def mark_watched(youtube, history_playlist, vid):
-    return youtube.playlistItems().insert(part='snippet', 
-                                              body={'snippet':{'playlistId':history_playlist,
-                                                               'resourceId': {'videoId':vid,
-                                                                              'kind':'youtube#video'}}}).execute()
+def mark_watched(youtube, credentials, vids):
+    history_playlist = get_user_playlists(youtube, credentials)["watchHistory"]
     
-    
-    
-    
-    
+    for vid in vids:
+        youtube.playlistItems().insert(part='snippet', 
+                                       body={'snippet':{'playlistId':history_playlist,
+                                                        'resourceId': {'videoId':vid,
+                                                                       'kind':'youtube#video'}}}).execute()
     
     
     
