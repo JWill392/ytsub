@@ -81,8 +81,8 @@ def _setup():
 def _list(args):
     youtube, credentials = _setup()
     
-    watched = api.get_watched_ids(youtube)
-    new = api.get_sub_vids(youtube, args.max_vids_per_sub, args.age_max)
+    watched = api.get_watched_ids(youtube, credentials)
+    new = api.get_sub_vids(youtube, credentials, args.max_vids_per_sub, args.age_max)
     unwatched_new = filter(lambda x: x.id not in watched, new)
     unwatched_new.sort(reverse=True)
     for v in unwatched_new:
@@ -91,7 +91,7 @@ def _list(args):
 def _mark_watched(args):
     youtube, credentials = _setup()
     
-    api.mark_watched(youtube, args.ids)
+    api.mark_watched(youtube, credentials, args.ids)
 
 def main():
     parser = argparse.ArgumentParser(
