@@ -46,10 +46,12 @@ import collections
 NUM_THREADS = 3
 
 class QueryLimit:
+    '''Tells a Query when to stop paging.
+    Called after each request, and once before first request.
+    Guaranteed to run once per response, even if already done.
+        |-> Useful to remove response items that are outside limit.'''
     def __call__(self, for_query, request, response):
-        '''Called before request.  First invocation is before first request.'''
         pass
-    
 
 class QueryLimitCount(QueryLimit):
     def __init__(self, MAX_ITEMS):
@@ -57,7 +59,7 @@ class QueryLimitCount(QueryLimit):
         self._item_count = 0
     
     def __call__(self, for_query, request, response):
-        if self._item_count == -1:
+        if self._MAX_ITEMS == -1:
             return
     
         # prevent last fetch overshoot
@@ -71,7 +73,7 @@ class QueryLimitCount(QueryLimit):
         try:
             self._item_count += len(response['items'])
         except KeyError:
-            pass # no items
+            return # no items
             
         # done if item max reached
         if self._item_count == self._MAX_ITEMS:
@@ -95,6 +97,10 @@ class Query:
         
         # setup for first call to limit -- before first request
         self._last_response = (self, self.get_last_request(), None)
+
+        # call each limit once before starting
+        for l in self._limit:
+            l(*self._last_response)
     
     def get_name(self):
         return self._name
@@ -105,13 +111,6 @@ class Query:
                 'kwargs':deepcopy(self._kwargs)}
     
     def request_next_page(self, http):
-        # if not already stopping, check if need to stop
-        if not self._done:
-            for l in self._limit:
-                l(*self._last_response)
-                if self._done:
-                    break
-    
         if self._done:
             raise StopIteration(self._done)
     
@@ -121,7 +120,15 @@ class Query:
         # send REST API request and wait for response
         response = self._request_function(**self._kwargs).execute(http=http)
         self._last_response = (self, self.get_last_request(), response)
-            
+           
+        # run limits
+        for l in self._limit:
+            l(*self._last_response)
+        
+        # if a limit says done, no need to check exhausted
+        if self._done:
+            return response 
+        
         # done if server exhausted (no more items avail)
         if 'nextPageToken' not in response:
             self._done = "Server has no more items"
@@ -265,6 +272,7 @@ def batch_query(http_factory, queries):
     # TODO group by for_query:list of responses
     def on_response_func(for_query, request, response):
         ret.append((for_query, request, response))
+        
     
     pool = RequestThreadPool(http_factory, on_response_func)    
     with pool:

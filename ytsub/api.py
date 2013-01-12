@@ -140,8 +140,3 @@ def mark_watched(youtube, credentials, vids):
     
     
     
-    
-    
-    
-    
-    
