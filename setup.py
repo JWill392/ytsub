@@ -31,6 +31,7 @@ setup(
     install_requires=[
         "google-api-python-client >= 1.0"
     ],
+    url = 'https://github.com/jwill392/ytsub',
     entry_points = {
         'console_scripts':
             ['ytsub = ytsub.main:main']},
