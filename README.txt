@@ -14,19 +14,12 @@ The above gets list of all unwatched subscription videos, filters out ones that 
 install
 =======
 
-Installing is pretty easy on linux systems
-1. Install pip (python package manager) if you don't have it::
+ytsub is in PyPI, so you can install it with::
+
+    $ pip install ytsub --upgrade
+
+If you don't have pip, on Ubuntu, you can install it with::
+
     $ sudo apt-get install python-pip
-2. Download ytsub.  To get the latest stable release, head to https://github.com/JWill392/ytsub/tags and click one of the download links for the latest tag.
-3. Open archive, take out the archive in /dist -- should look like: ytsub-<version number>.tar.gz. Don't uncompress it.
-4. Run pip install with the dist archive::
-    $ sudo pip install ytsub-<version number>.tar.gz  --upgrade
 
-That's it.  It's runnable like any other command::
-    $ ytsub list -c 1 -t 0
-
-Alternatively, you can use git:
-    1. sudo apt-get install python-pip git
-    2. git clone -b release https://github.com/JWill392/ytsub.git
-    3. sudo pip install ytsub/dist/<press tab -- should be just the one dist archive in here> --upgrade
-    4. rm -rf ytsub
+For other operating systems, see here: http://pypi.python.org/pypi/pip
