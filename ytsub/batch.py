@@ -22,6 +22,9 @@ from apiclient.errors import HttpError
 from copy import deepcopy
 from credentials import acquire_credentials
 from apiclient.discovery import build
+from ytsub.video import Vid
+from datetime import datetime
+from datetime import timedelta
 
 
 import random
@@ -78,6 +81,40 @@ class QueryLimitCount(QueryLimit):
         # done if item max reached
         if self._item_count == self._MAX_ITEMS:
             for_query._done = "received MAX_ITEMS items (%i)" % self._item_count
+
+class QueryLimitAge(QueryLimit):
+    def __init__(self, MAX_AGE):
+        self._active = (MAX_AGE != -1)
+        if not self._active:
+            return
+            
+        self._cutoff_date = datetime.now() - timedelta(MAX_AGE+1) #days
+        
+    def __call__(self, for_query, request, response):
+        if not self._active:
+            return
+        
+        # Nothing to do before first response
+        if response is None:
+            return
+        
+        def within_cutoff(vid):
+            v = Vid(None,vid)
+            if v.date < self._cutoff_date:
+                return False
+            return True
+        
+
+        
+        # remove videos outside of cutoff
+        vids_before_filter = len(response['items'])
+        response['items'][:] = [i for i in response['items'] if within_cutoff(i)]    
+        # NOTE, using list slice in order to remove from response, not just make new copy        
+        
+        if vids_before_filter != len(response['items']):
+            return
+        
+
 
 class Query:
     def __init__(self, request_function, kwargs, limit=QueryLimit(), name=''):

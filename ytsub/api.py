@@ -93,15 +93,14 @@ def get_videos_in_playlists(youtube, credentials, playlist_list, MAX_VIDS, MAX_A
     assert MAX_VIDS >= -1
     assert MAX_AGE >= -1
 
-    # FIXME MAX_AGE was removed on batchifying this.  TODO write QueryLimitDate and use here
-
     playlist_queries = []
     
     for playlist in playlist_list:
         query = batch.Query(youtube.playlistItems().list,
                             {'playlistId':playlist.playlist_id,
                              'part':'snippet'},
-                            limit=batch.QueryLimitCount(MAX_VIDS))
+                            limit=(batch.QueryLimitCount(MAX_VIDS),
+                                   batch.QueryLimitAge(MAX_AGE)))
         query._name = playlist
         playlist_queries.append(query)
     
