@@ -16,7 +16,7 @@ install
 
 ytsub is in PyPI, so you can install it with::
 
-    $ pip install ytsub --upgrade
+    $ sudo pip install ytsub --upgrade
 
 If you don't have pip, on Ubuntu, you can install it with::
 
